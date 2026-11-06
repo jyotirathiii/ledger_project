@@ -6,6 +6,13 @@ load_dotenv()
 
 class KeyConflict(Exception):
     pass
+class RiskBLocked(Exception):  
+    pass
+
+LARGE_AMOUNT= 500
+VELOCITY_LIMIT= 3
+VELOCITY_MINUTES= 5
+NEW_RECIEVER_AMOUNT = 200      
 
 def get_connection():
     return mysql.connector.connect(
@@ -37,6 +44,57 @@ def change_status(cur,transfer_id,new_status):
         raise ValueError(f"Invalid status change:{old_status}-> {new_status}")
     cur.execute("UPDATE transfers SET status = %s WHERE id = %s",(new_status,transfer_id)) 
     cur.execute("INSERT INTO transfer_status_history(transfer_id,old_status,new_status) VALUES(%s,%s,%s)",(transfer_id,old_status,new_status))  
+
+def evaluate_risk(cur,from_id,to_id,amount):
+    score=0
+    reasons=[]
+    if amount > LARGE_AMOUNT:
+        score+=40
+        reasons.append("Large Amount")
+
+    cur.execute("SElECT COUNT(*) FROM transfers WHERE from_account_id = %s " 
+    "AND created_at >= NOW() - INTERVAL %s MINUTE",(from_id,VELOCITY_MINUTES))
+    if cur.fetchone()[0] > VELOCITY_LIMIT:
+        score+=50
+        reasons.append("TOO many transfers in short time")
+
+    cur.execute("SELECT AVG(amount),COUNT(*) FROM transfers "
+    "WHERE from_account_id = %s AND status IN ('completed','partially_refunded','refunded') ",
+        (from_id,))         
+
+    avg_amount,past_amounts=cur.fetchone()
+    if past_amounts >=3 and amount > avg_amount *5: 
+       score+=30
+       reasons.append("Amount is much higher than usual")      
+
+    cur.execute("SELECT COUNT(*) FROM transfers WHERE from_account_id = %s AND to_account_id = %s",(from_id,to_id)) 
+
+    if cur.fetchone()[0] == 0 and amount > NEW_RECIEVER_AMOUNT:
+        score+=20
+        reasons.append("New Reciever ")
+
+    if score >=80:
+        decisions = "BLOCK"
+    elif score >=40:
+        decisions = "REVIEW"
+    else:
+        decisions = "ALLOW"        
+    return score,reasons,decisions
+
+def log_risk(from_id,to_id,amount,score,decision,reasons):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("INSERT INTO risk_checks (from_account_id,to_account_id,amount,score,decision,reasons) VALUES (%s,%s,%s,%s,%s,%s)",(from_id,to_id,amount,score,decision,",".join(reasons)))
+        conn.commit()
+  
+    finally:
+        cur.close()
+        conn.close()
+
+
+
+
 
 
 def transfer(from_id, to_id,amount,idem_key):
@@ -80,6 +138,11 @@ def transfer(from_id, to_id,amount,idem_key):
             raise ValueError("Sender account are not found")
         if row[0]<amount:
             raise ValueError("Balance is Low")
+
+        score,reasons,decision=evaluate_risk(cur,from_id,to_id,amount)
+        log_risk(from_id,to_id,amount,score,decision,reasons)
+        if decision == "BLOCK":
+            raise RiskBLocked("Transfer Blocked due to risk")    
 
 
         cur.execute("INSERT INTO transfers (from_account_id,to_account_id,amount,status) VALUES (%s, %s ,%s,'created')",(from_id,to_id,amount))

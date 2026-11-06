@@ -54,6 +54,8 @@ def do_transfer(
         )
     except ledger.KeyConflict as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except ledger.RiskBLocked as e:
+        raise HTTPException(status_code=403, detail=str(e))    
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception:
