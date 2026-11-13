@@ -24,3 +24,7 @@ Python, FastAPI, MySQL
 - Ledger entries are never edited or deleted. A refund adds new reverse entries.
 - Duplicate requests with the same Idempotency-Key return the first result.
 - Money is stored as DECIMAL, never FLOAT.
+
+ ## Related Repository
+
+Frontend Repository: [Ledger Flutter App](https://github.com/jyotirathiii/ledger_project_frontend) 
