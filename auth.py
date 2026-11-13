@@ -21,7 +21,7 @@ def verify_password(password,password_hash):
 def create_token(user_id):
     payload={
         "sub":str(user_id),
-        "exp":datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(hours=1)
+        "exp":datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(days=7)
     }        
     return jwt.encode(payload,SECRET,algorithm=ALGO)
 
