@@ -102,7 +102,8 @@ def my_history(user_id: int = Depends(auth.current_user_id)):
     return [
         {
             "transfer_id": r[0], "from": r[1], "to": r[2],
-            "amount": r[3], "status": r[4], "date": r[5]
+            "amount": r[3], "status": r[4], "date": r[5],
+            "refunded":r[6]
         }
         for r in rows
     ]

@@ -194,7 +194,8 @@ def get_balance(account_id):
 def get_history(account_id):
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("""SELECT t.id,a1.name,a2.name,t.amount,t.status,t.created_at
+    cur.execute("""SELECT t.id,a1.name,a2.name,t.amount,t.status,t.created_at, COALESCE((SELECT SUM(r.amount) FROM refunds r WHERE r.transfer_id = t.id), 0)
+
     FROM transfers t 
     JOIN accounts a1 on t.from_account_id = a1.id
     JOIN accounts a2 on t.to_account_id= a2.id
